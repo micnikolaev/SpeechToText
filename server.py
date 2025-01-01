@@ -16,6 +16,10 @@ MODELS = {
         'url': "https://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip",
         'path': "vosk-model-ru-0.42"
     },
+    'medium': {
+        'url': "https://alphacephei.com/vosk/models/vosk-model-ru-0.10.zip",
+        'path': "vosk-model-ru-0.10"
+    },
     'small': {
         'url': "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip",
         'path': "vosk-model-small-ru-0.22"
@@ -102,6 +106,7 @@ if __name__ == '__main__':
     print("Starting server...")
     try:
         download_model('full')
+        download_model('medium')
         download_model('small')
     except Exception as e:
         print(f"Error downloading model: {e}")
