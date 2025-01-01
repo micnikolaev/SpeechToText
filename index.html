@@ -63,16 +63,20 @@
             font-size: 14px;
             margin-top: 8px;
         }
-        #transcription {
+        .text-container {
+            position: relative;
             margin-top: 16px;
             padding: 16px;
             border: 1px solid #334155;
             border-radius: 4px;
-            min-height: 100px;
+            background: #0f172a;
+        }
+        #transcription, #summary {
             white-space: pre-wrap;
             line-height: 1.5;
-            background: #0f172a;
             color: #e2e8f0;
+            padding-right: 40px;
+            min-height: 100px;
         }
         .progress {
             margin-top: 12px;
@@ -119,19 +123,41 @@
         #summarizeBtn {
             background: #4f46e5;
         }
-        #summary {
-            margin-top: 16px;
-            padding: 16px;
-            border: 1px solid #334155;
-            border-radius: 4px;
-            background: #0f172a;
-            color: #e2e8f0;
-            white-space: pre-wrap;
-            line-height: 1.6;
+        #summary h3 { 
+            color: #f1f5f9; 
+            margin-bottom: 12px; 
         }
-        #summary h3 { color: #f1f5f9; margin-bottom: 12px; }
-        #summary ul { list-style-type: none; padding-left: 0; }
-        #summary li { margin-bottom: 12px; padding-left: 20px; position: relative; }
+        #summary ul { 
+            list-style-type: none; 
+            padding-left: 0; 
+        }
+        #summary li { 
+            margin-bottom: 12px; 
+            padding-left: 20px; 
+            position: relative; 
+        }
+        .copy-button {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: transparent;
+            border: none;
+            padding: 4px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .copy-button:hover {
+            opacity: 1;
+        }
+        .copy-button svg {
+            width: 20px;
+            height: 20px;
+            stroke: #e2e8f0;
+        }
     </style>
 </head>
 <body>
@@ -165,9 +191,26 @@
         </div>
 
         <div id="error" class="error"></div>
-        <div id="transcription"></div>
-        <div id="summary"></div>
-        <div id="summaryStatus" style="display: none;"></div>
+        
+        <div class="text-container">
+            <div id="transcription"></div>
+            <button class="copy-button" onclick="copyText('transcription')" title="Скопировать текст">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="text-container" id="summaryContainer" style="display: none;">
+            <div id="summary"></div>
+            <button class="copy-button" onclick="copyText('summary')" title="Скопировать текст">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                </svg>
+            </button>
+        </div>
     </div>
 
     <script>
@@ -197,11 +240,11 @@
         async function summarizeText() {
             const text = document.getElementById('transcription').textContent;
             const summaryDiv = document.getElementById('summary');
+            const summaryContainer = document.getElementById('summaryContainer');
             const summarizeBtn = document.getElementById('summarizeBtn');
             
-            // Добавляем статус
-            summaryDiv.innerHTML = '<div id="summaryStatus">Создаём краткое описание...</div>';
-            summaryDiv.style.display = 'block';
+            summaryContainer.style.display = 'block';
+            summaryDiv.innerHTML = 'Создаём краткое описание...';
             summarizeBtn.disabled = true;
             
             try {
@@ -219,7 +262,6 @@
                 
                 const result = await response.json();
                 
-                // Форматируем текст
                 let formattedSummary = result.summary
                     .replace(/###/g, '<h3>')
                     .replace(/\*\*/g, '')
@@ -242,7 +284,7 @@
             const file = fileInput.files[0];
             const transcriptionDiv = document.getElementById('transcription');
             const summarizeBtn = document.getElementById('summarizeBtn');
-            const summaryDiv = document.getElementById('summary');
+            const summaryContainer = document.getElementById('summaryContainer');
 
             if (!file) {
                 showError('Выберите WAV файл');
@@ -252,7 +294,7 @@
             const transcribeBtn = document.getElementById('transcribeBtn');
             transcribeBtn.disabled = true;
             summarizeBtn.style.display = 'none';
-            summaryDiv.style.display = 'none';
+            summaryContainer.style.display = 'none';
             updateStatus('Обработка...');
             showProgress(true);
 
@@ -296,6 +338,32 @@
             }
         }
 
+        async function copyText(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent;
+            
+            try {
+                await navigator.clipboard.writeText(text);
+                
+                // Визуальная обратная связь
+                const button = element.parentElement.querySelector('.copy-button');
+                const originalSvg = button.innerHTML;
+                
+                // Меняем иконку на галочку
+                button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>`;
+                
+                // Через 2 секунды возвращаем оригинальную иконку
+                setTimeout(() => {
+                    button.innerHTML = originalSvg;
+                }, 2000);
+                
+            } catch (err) {
+                console.error('Ошибка при копировании текста:', err);
+            }
+        }
+
         function updateStatus(message) {
             document.getElementById('transcribeStatus').textContent = message;
         }
@@ -306,7 +374,6 @@
 
         function showError(message) {
             const error = document.getElementById('error');
-            error.textContent = message;
             error.style.display = message ? 'block' : 'none';
         }
     </script>
