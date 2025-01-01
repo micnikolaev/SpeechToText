@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Vosk Web Transcriber</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vosk/0.3.39/vosk.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        #transcription {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #eee;
+            min-height: 100px;
+        }
+        .status {
+            margin-top: 10px;
+            color: #666;
+        }
+        .error {
+            color: #ff0000;
+            margin-top: 10px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:disabled {
+            background: #ccc;
+        }
+        .model-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Vosk Web Transcriber</h1>
+        
+        <div class="model-section">
+            <h3>Загрузка модели</h3>
+            <input type="file" id="modelFile" accept=".tar.gz" />
+            <button onclick="loadModelFromFile()" id="loadModelBtn">Загрузить модель</button>
+            <div id="modelStatus" class="status"></div>
+        </div>
+
+        <div class="transcription-section">
+            <h3>Транскрибация</h3>
+            <input type="file" id="audioFile" accept=".wav" />
+            <button onclick="transcribeAudio()" id="transcribeBtn" disabled>Транскрибировать</button>
+            <div id="transcribeStatus" class="status"></div>
+        </div>
+
+        <div id="error" class="error"></div>
+        <div id="transcription"></div>
+    </div>
+
+    <script>
+        let model;
+        let isModelLoaded = false;
+
+        async function loadModelFromFile() {
+            const modelFile = document.getElementById('modelFile').files[0];
+            if (!modelFile) {
+                showError('Пожалуйста, выберите файл модели (.tar.gz)');
+                return;
+            }
+
+            try {
+                updateModelStatus('Загрузка модели...');
+                const reader = new FileReader();
+                
+                reader.onload = async function(e) {
+                    try {
+                        const modelData = e.target.result;
+                        console.log('Model data loaded, size:', modelData.byteLength);
+                        updateModelStatus('Инициализация модели...');
+                        
+                        model = await Vosk.createModel(modelData);
+                        isModelLoaded = true;
+                        
+                        updateModelStatus('Модель успешно загружена');
+                        document.getElementById('transcribeBtn').disabled = false;
+                        showError(''); // Clear any previous errors
+                    } catch (error) {
+                        console.error('Model initialization error:', error);
+                        showError('Ошибка инициализации модели: ' + error.message);
+                        updateModelStatus('Ошибка загрузки');
+                    }
+                };
+
+                reader.onerror = function(error) {
+                    console.error('FileReader error:', error);
+                    showError('Ошибка чтения файла модели');
+                    updateModelStatus('Ошибка чтения файла');
+                };
+
+                reader.readAsArrayBuffer(modelFile);
+            } catch (error) {
+                console.error('Load model error:', error);
+                showError('Ошибка загрузки модели: ' + error.message);
+                updateModelStatus('Ошибка загрузки');
+            }
+        }
+
+        async function transcribeAudio() {
+            const fileInput = document.getElementById('audioFile');
+            const transcriptionDiv = document.getElementById('transcription');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showError('Пожалуйста, выберите WAV файл');
+                return;
+            }
+
+            if (!isModelLoaded) {
+                showError('Пожалуйста, сначала загрузите модель');
+                return;
+            }
+
+            try {
+                updateTranscribeStatus('Транскрибация...');
+                const reader = new FileReader();
+
+                reader.onload = async function(e) {
+                    try {
+                        const audioData = e.target.result;
+                        const recognizer = new Vosk.Recognizer({model: model, sampleRate: 16000});
+                        
+                        // Process audio in chunks
+                        const chunk_size = 4096;
+                        for (let i = 0; i < audioData.byteLength; i += chunk_size) {
+                            const chunk = audioData.slice(i, i + chunk_size);
+                            recognizer.acceptWaveform(new Float32Array(chunk));
+                        }
+
+                        const result = recognizer.final();
+                        transcriptionDiv.textContent = result.text;
+                        updateTranscribeStatus('Транскрибация завершена');
+                        
+                        recognizer.free();
+                    } catch (error) {
+                        showError('Ошибка при обработке аудио: ' + error.message);
+                        updateTranscribeStatus('Ошибка транскрибации');
+                    }
+                };
+
+                reader.onerror = function(error) {
+                    showError('Ошибка чтения аудио файла');
+                    updateTranscribeStatus('Ошибка чтения файла');
+                };
+
+                reader.readAsArrayBuffer(file);
+            } catch (error) {
+                showError('Ошибка при транскрибации: ' + error.message);
+                updateTranscribeStatus('Ошибка');
+            }
+        }
+
+        function updateModelStatus(message) {
+            document.getElementById('modelStatus').textContent = message;
+        }
+
+        function updateTranscribeStatus(message) {
+            document.getElementById('transcribeStatus').textContent = message;
+        }
+
+        function showError(message) {
+            document.getElementById('error').textContent = message;
+        }
+    </script>
+</body>
+</html>
