@@ -82,6 +82,15 @@
             width: 0%;
             transition: width 0.3s ease;
         }
+        .checkbox {
+            display: flex;
+            align-items: center;
+            margin-top: 12px;
+            margin-bottom: 16px;
+        }
+        .checkbox input {
+            margin-right: 8px;
+        }
     </style>
 </head>
 <body>
@@ -100,6 +109,10 @@
         <div class="section">
             <h2>Транскрибация аудио</h2>
             <input type="file" id="audioFile" accept="audio/wav" class="file-input" />
+            <div class="checkbox">
+                <input type="checkbox" id="useAI" />
+                <label for="useAI">Использовать AI для исправления текста</label>
+            </div>
             <button onclick="transcribeAudio()" id="transcribeBtn">Транскрибировать</button>
             <div class="progress" id="transcribeProgress">
                 <div class="progress-bar" id="transcribeProgressBar"></div>
@@ -112,11 +125,12 @@
     </div>
 
     <script>
-        async function sendAudioToServer(audioData) {
+        async function sendAudioToServer(audioData, useAI) {
             try {
                 const formData = new FormData();
                 formData.append('audio', new Blob([audioData], { type: 'audio/wav' }), 'audio.wav');
                 formData.append('model', document.getElementById('modelSelect').value);
+                formData.append('useAI', useAI);
                 
                 const response = await fetch('/transcribe', {
                     method: 'POST',
@@ -138,6 +152,7 @@
             const fileInput = document.getElementById('audioFile');
             const file = fileInput.files[0];
             const transcriptionDiv = document.getElementById('transcription');
+            const useAI = document.getElementById('useAI').checked;
 
             if (!file) {
                 showError('Выберите WAV файл');
@@ -157,7 +172,7 @@
                 reader.onload = async function(e) {
                     try {
                         const audioData = e.target.result;
-                        const text = await sendAudioToServer(audioData);
+                        const text = await sendAudioToServer(audioData, useAI);
                         console.log('Получен результат распознавания:', text);
                         transcriptionDiv.textContent = text || 'Текст не распознан';
                         updateStatus('Транскрибация завершена');
