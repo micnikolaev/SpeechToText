@@ -6,10 +6,13 @@ import os
 from pathlib import Path
 import zipfile
 import json
+from ollama_service import OllamaService
 
 app = Flask(__name__)
 import logging
 logging.basicConfig(level=logging.INFO)
+
+ollama = OllamaService()
 
 MODELS = {
     'full': {
@@ -92,6 +95,8 @@ def transcribe():
                 full_text.append(final_text)
                 
             complete_text = ' '.join(full_text).strip()
+            if complete_text:
+                complete_text = ollama.process_text(complete_text)
             return jsonify({'text': complete_text or 'Текст не распознан'})
             
     except Exception as e:
@@ -108,7 +113,11 @@ if __name__ == '__main__':
         download_model('full')
         download_model('medium')
         download_model('small')
+        print("Starting Ollama...")
+        if ollama.start():
+            print("Starting server on http://localhost:5000")
+            app.run(port=5000)
+        else:
+            print("Failed to start Ollama")
     except Exception as e:
-        print(f"Error downloading model: {e}")
-    print("Starting server on http://localhost:5000")
-    app.run(port=5000)
+        print(f"Error: {e}")
