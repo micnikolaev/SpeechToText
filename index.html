@@ -1,52 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vosk Web Transcriber</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/vosk/0.3.39/vosk.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: system-ui, -apple-system, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
+            background-color: #f8fafc;
         }
         .container {
-            border: 1px solid #ccc;
-            padding: 20px;
-            border-radius: 5px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 24px;
         }
-        #transcription {
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid #eee;
-            min-height: 100px;
+        h1 {
+            color: #1e293b;
+            margin-bottom: 24px;
         }
-        .status {
-            margin-top: 10px;
-            color: #666;
+        .section {
+            margin-bottom: 24px;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
         }
-        .error {
-            color: #ff0000;
-            margin-top: 10px;
+        .file-input, .model-select {
+            display: block;
+            margin-bottom: 12px;
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
         }
         button {
-            background: #007bff;
+            background: #2563eb;
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 8px 16px;
+            border-radius: 4px;
             cursor: pointer;
-            margin: 10px 0;
+            font-size: 14px;
         }
         button:disabled {
-            background: #ccc;
+            background: #94a3b8;
+            cursor: not-allowed;
         }
-        .model-section {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f5f5f5;
-            border-radius: 5px;
+        .status {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #64748b;
+        }
+        .error {
+            color: #dc2626;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        #transcription {
+            margin-top: 16px;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .progress {
+            margin-top: 12px;
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+            overflow: hidden;
+            display: none;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #2563eb;
+            width: 0%;
+            transition: width 0.3s ease;
         }
     </style>
 </head>
@@ -54,17 +88,21 @@
     <div class="container">
         <h1>Vosk Web Transcriber</h1>
         
-        <div class="model-section">
-            <h3>Загрузка модели</h3>
-            <input type="file" id="modelFile" accept=".tar.gz" />
-            <button onclick="loadModelFromFile()" id="loadModelBtn">Загрузить модель</button>
-            <div id="modelStatus" class="status"></div>
+        <div class="section">
+            <h2>Выбор модели</h2>
+            <select id="modelSelect" class="model-select">
+                <option value="full">Полная модель (более точная)</option>
+                <option value="small">Маленькая модель (быстрее)</option>
+            </select>
         </div>
-
-        <div class="transcription-section">
-            <h3>Транскрибация</h3>
-            <input type="file" id="audioFile" accept=".wav" />
-            <button onclick="transcribeAudio()" id="transcribeBtn" disabled>Транскрибировать</button>
+        
+        <div class="section">
+            <h2>Транскрибация аудио</h2>
+            <input type="file" id="audioFile" accept="audio/wav" class="file-input" />
+            <button onclick="transcribeAudio()" id="transcribeBtn">Транскрибировать</button>
+            <div class="progress" id="transcribeProgress">
+                <div class="progress-bar" id="transcribeProgressBar"></div>
+            </div>
             <div id="transcribeStatus" class="status"></div>
         </div>
 
@@ -73,117 +111,92 @@
     </div>
 
     <script>
-        let model;
-        let isModelLoaded = false;
-
-        async function loadModelFromFile() {
-            const modelFile = document.getElementById('modelFile').files[0];
-            if (!modelFile) {
-                showError('Пожалуйста, выберите файл модели (.tar.gz)');
-                return;
-            }
-
+        async function sendAudioToServer(audioData) {
             try {
-                updateModelStatus('Загрузка модели...');
-                const reader = new FileReader();
+                const formData = new FormData();
+                formData.append('audio', new Blob([audioData], { type: 'audio/wav' }), 'audio.wav');
+                formData.append('model', document.getElementById('modelSelect').value);
                 
-                reader.onload = async function(e) {
-                    try {
-                        const modelData = e.target.result;
-                        console.log('Model data loaded, size:', modelData.byteLength);
-                        updateModelStatus('Инициализация модели...');
-                        
-                        model = await Vosk.createModel(modelData);
-                        isModelLoaded = true;
-                        
-                        updateModelStatus('Модель успешно загружена');
-                        document.getElementById('transcribeBtn').disabled = false;
-                        showError(''); // Clear any previous errors
-                    } catch (error) {
-                        console.error('Model initialization error:', error);
-                        showError('Ошибка инициализации модели: ' + error.message);
-                        updateModelStatus('Ошибка загрузки');
-                    }
-                };
-
-                reader.onerror = function(error) {
-                    console.error('FileReader error:', error);
-                    showError('Ошибка чтения файла модели');
-                    updateModelStatus('Ошибка чтения файла');
-                };
-
-                reader.readAsArrayBuffer(modelFile);
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                return result.text;
             } catch (error) {
-                console.error('Load model error:', error);
-                showError('Ошибка загрузки модели: ' + error.message);
-                updateModelStatus('Ошибка загрузки');
+                throw new Error('Ошибка отправки аудио: ' + error.message);
             }
         }
 
         async function transcribeAudio() {
             const fileInput = document.getElementById('audioFile');
-            const transcriptionDiv = document.getElementById('transcription');
             const file = fileInput.files[0];
+            const transcriptionDiv = document.getElementById('transcription');
 
             if (!file) {
-                showError('Пожалуйста, выберите WAV файл');
+                showError('Выберите WAV файл');
                 return;
             }
 
-            if (!isModelLoaded) {
-                showError('Пожалуйста, сначала загрузите модель');
-                return;
-            }
+            const transcribeBtn = document.getElementById('transcribeBtn');
+            transcribeBtn.disabled = true;
+            updateStatus('Обработка...');
+            showProgress(true);
+
+            transcriptionDiv.textContent = 'Идёт распознавание...';
 
             try {
-                updateTranscribeStatus('Транскрибация...');
                 const reader = new FileReader();
-
+                
                 reader.onload = async function(e) {
                     try {
                         const audioData = e.target.result;
-                        const recognizer = new Vosk.Recognizer({model: model, sampleRate: 16000});
-                        
-                        // Process audio in chunks
-                        const chunk_size = 4096;
-                        for (let i = 0; i < audioData.byteLength; i += chunk_size) {
-                            const chunk = audioData.slice(i, i + chunk_size);
-                            recognizer.acceptWaveform(new Float32Array(chunk));
-                        }
-
-                        const result = recognizer.final();
-                        transcriptionDiv.textContent = result.text;
-                        updateTranscribeStatus('Транскрибация завершена');
-                        
-                        recognizer.free();
+                        const text = await sendAudioToServer(audioData);
+                        console.log('Получен результат распознавания:', text);
+                        transcriptionDiv.textContent = text || 'Текст не распознан';
+                        updateStatus('Транскрибация завершена');
                     } catch (error) {
-                        showError('Ошибка при обработке аудио: ' + error.message);
-                        updateTranscribeStatus('Ошибка транскрибации');
+                        showError(error.message);
+                        transcriptionDiv.textContent = 'Произошла ошибка при распознавании';
+                    } finally {
+                        transcribeBtn.disabled = false;
+                        showProgress(false);
                     }
                 };
 
-                reader.onerror = function(error) {
-                    showError('Ошибка чтения аудио файла');
-                    updateTranscribeStatus('Ошибка чтения файла');
+                reader.onerror = () => {
+                    showError('Ошибка чтения файла');
+                    transcribeBtn.disabled = false;
+                    showProgress(false);
+                    transcriptionDiv.textContent = 'Ошибка чтения файла';
                 };
 
                 reader.readAsArrayBuffer(file);
             } catch (error) {
-                showError('Ошибка при транскрибации: ' + error.message);
-                updateTranscribeStatus('Ошибка');
+                showError('Ошибка: ' + error.message);
+                transcribeBtn.disabled = false;
+                showProgress(false);
+                transcriptionDiv.textContent = 'Произошла ошибка';
             }
         }
 
-        function updateModelStatus(message) {
-            document.getElementById('modelStatus').textContent = message;
-        }
-
-        function updateTranscribeStatus(message) {
+        function updateStatus(message) {
             document.getElementById('transcribeStatus').textContent = message;
         }
 
+        function showProgress(show) {
+            document.getElementById('transcribeProgress').style.display = show ? 'block' : 'none';
+        }
+
         function showError(message) {
-            document.getElementById('error').textContent = message;
+            const error = document.getElementById('error');
+            error.textContent = message;
+            error.style.display = message ? 'block' : 'none';
         }
     </script>
 </body>
