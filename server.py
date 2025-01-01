@@ -1,6 +1,7 @@
-from flask import Flask, send_file, request, jsonify, send_from_directory
-from vosk import Model, KaldiRecognizer
+from flask import Flask, send_file, request, jsonify
 import requests
+from vosk import Model, KaldiRecognizer
+import subprocess
 import wave
 import os
 from pathlib import Path
@@ -54,6 +55,20 @@ def download_model(model_type='full'):
         zip_path.unlink()
         print("Model ready")
 
+def resample_audio(input_path, output_path, target_sr=16000):
+    try:
+        subprocess.run([
+            'ffmpeg', '-i', input_path,
+            '-ar', str(target_sr),
+            '-ac', '1',
+            '-y',
+            output_path
+        ], check=True, capture_output=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"FFmpeg error: {e.stderr.decode()}")
+        return False
+
 @app.route('/')
 def home():
     return send_file('index.html')
@@ -71,13 +86,19 @@ def transcribe():
         
     audio_file = request.files['audio']
     temp_path = "temp_audio.wav"
+    resampled_path = "resampled_audio.wav"
+    use_ai = request.form.get('useAI') == "true"
     
     try:
         audio_file.save(temp_path)
+        
+        if not resample_audio(temp_path, resampled_path):
+            return jsonify({'error': 'Failed to resample audio'}), 500
+        
         model = Model(str(MODEL_PATH / MODELS[model_type]['path']))
         
-        with wave.open(temp_path, 'rb') as wf:
-            rec = KaldiRecognizer(model, wf.getframerate())
+        with wave.open(resampled_path, 'rb') as wf:
+            rec = KaldiRecognizer(model, 16000)
             
             full_text = []
             while True:
@@ -95,7 +116,7 @@ def transcribe():
                 full_text.append(final_text)
                 
             complete_text = ' '.join(full_text).strip()
-            if complete_text:
+            if use_ai and complete_text:
                 complete_text = ollama.process_text(complete_text)
             return jsonify({'text': complete_text or 'Текст не распознан'})
             
@@ -104,8 +125,22 @@ def transcribe():
         return jsonify({'error': str(e)}), 500
         
     finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        for path in [temp_path, resampled_path]:
+            if os.path.exists(path):
+                os.remove(path)
+
+@app.route('/summarize', methods=['POST'])
+def summarize():
+    try:
+        text = request.json.get('text')
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+            
+        summary = ollama.summarize_text(text)
+        return jsonify({'summary': summary})
+    except Exception as e:
+        app.logger.error(f'Error: {str(e)}')
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("Starting server...")

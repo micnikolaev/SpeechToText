@@ -10,31 +10,35 @@
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f8fafc;
+            background-color: #0f172a;
+            color: #e2e8f0;
         }
         .container {
-            background: white;
+            background: #1e293b;
             border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
             padding: 24px;
         }
-        h1 {
-            color: #1e293b;
+        h1, h2 {
+            color: #f1f5f9;
             margin-bottom: 24px;
         }
         .section {
             margin-bottom: 24px;
             padding: 16px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #334155;
             border-radius: 6px;
+            background: #1e293b;
         }
         .file-input, .model-select {
             display: block;
             margin-bottom: 12px;
             width: 100%;
             padding: 8px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #334155;
             border-radius: 4px;
+            background: #0f172a;
+            color: #e2e8f0;
         }
         button {
             background: #2563eb;
@@ -46,32 +50,34 @@
             font-size: 14px;
         }
         button:disabled {
-            background: #94a3b8;
+            background: #475569;
             cursor: not-allowed;
         }
         .status {
             margin-top: 8px;
             font-size: 14px;
-            color: #64748b;
+            color: #94a3b8;
         }
         .error {
-            color: #dc2626;
+            color: #ef4444;
             font-size: 14px;
             margin-top: 8px;
         }
         #transcription {
             margin-top: 16px;
             padding: 16px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #334155;
             border-radius: 4px;
             min-height: 100px;
             white-space: pre-wrap;
             line-height: 1.5;
+            background: #0f172a;
+            color: #e2e8f0;
         }
         .progress {
             margin-top: 12px;
             height: 4px;
-            background: #e2e8f0;
+            background: #334155;
             border-radius: 2px;
             overflow: hidden;
             display: none;
@@ -87,18 +93,53 @@
             align-items: center;
             margin-top: 12px;
             margin-bottom: 16px;
+            color: #e2e8f0;
         }
         .checkbox input {
             margin-right: 8px;
         }
+        option {
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        ::file-selector-button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        #summarizeBtn {
+            background: #4f46e5;
+        }
+        #summary {
+            margin-top: 16px;
+            padding: 16px;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            background: #0f172a;
+            color: #e2e8f0;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        #summary h3 { color: #f1f5f9; margin-bottom: 12px; }
+        #summary ul { list-style-type: none; padding-left: 0; }
+        #summary li { margin-bottom: 12px; padding-left: 20px; position: relative; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Speech To Text</h1>
+        <h1>Перевод аудио в текст</h1>
         
         <div class="section">
-            <h2>Выбор модели</h2>
+            <h2>Выберите модель</h2>
             <select id="modelSelect" class="model-select">
                 <option value="full">Vosk русская модель 0.42 (1.8 ГБ, наиболее точная)</option>
                 <option value="medium">Vosk русская модель 0.10 (2.5 ГБ, средняя точность)</option>
@@ -107,13 +148,16 @@
         </div>
         
         <div class="section">
-            <h2>Транскрибация аудио</h2>
+            <h2>Загрузите аудио (.wav)</h2>
             <input type="file" id="audioFile" accept="audio/wav" class="file-input" />
             <div class="checkbox">
                 <input type="checkbox" id="useAI" />
                 <label for="useAI">Использовать AI для исправления текста</label>
             </div>
-            <button onclick="transcribeAudio()" id="transcribeBtn">Транскрибировать</button>
+            <div class="button-group">
+                <button onclick="transcribeAudio()" id="transcribeBtn">Перевести в текст</button>
+                <button onclick="summarizeText()" id="summarizeBtn" style="display: none">Сделать краткое описание</button>
+            </div>
             <div class="progress" id="transcribeProgress">
                 <div class="progress-bar" id="transcribeProgressBar"></div>
             </div>
@@ -122,6 +166,8 @@
 
         <div id="error" class="error"></div>
         <div id="transcription"></div>
+        <div id="summary"></div>
+        <div id="summaryStatus" style="display: none;"></div>
     </div>
 
     <script>
@@ -130,7 +176,7 @@
                 const formData = new FormData();
                 formData.append('audio', new Blob([audioData], { type: 'audio/wav' }), 'audio.wav');
                 formData.append('model', document.getElementById('modelSelect').value);
-                formData.append('useAI', useAI);
+                formData.append('useAI', document.getElementById('useAI').checked.toString());
                 
                 const response = await fetch('/transcribe', {
                     method: 'POST',
@@ -148,11 +194,55 @@
             }
         }
 
+        async function summarizeText() {
+            const text = document.getElementById('transcription').textContent;
+            const summaryDiv = document.getElementById('summary');
+            const summarizeBtn = document.getElementById('summarizeBtn');
+            
+            // Добавляем статус
+            summaryDiv.innerHTML = '<div id="summaryStatus">Создаём краткое описание...</div>';
+            summaryDiv.style.display = 'block';
+            summarizeBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/summarize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Форматируем текст
+                let formattedSummary = result.summary
+                    .replace(/###/g, '<h3>')
+                    .replace(/\*\*/g, '')
+                    .replace(/\d\./g, '•')
+                    .split('\n')
+                    .filter(line => line.trim())
+                    .map(line => `<li>${line.trim()}</li>`)
+                    .join('\n');
+                    
+                summaryDiv.innerHTML = `<ul>${formattedSummary}</ul>`;
+            } catch (error) {
+                summaryDiv.innerHTML = `<div class="error">Ошибка создания краткого описания: ${error.message}</div>`;
+            } finally {
+                summarizeBtn.disabled = false;
+            }
+        }
+
         async function transcribeAudio() {
             const fileInput = document.getElementById('audioFile');
             const file = fileInput.files[0];
             const transcriptionDiv = document.getElementById('transcription');
-            const useAI = document.getElementById('useAI').checked;
+            const summarizeBtn = document.getElementById('summarizeBtn');
+            const summaryDiv = document.getElementById('summary');
 
             if (!file) {
                 showError('Выберите WAV файл');
@@ -161,6 +251,8 @@
 
             const transcribeBtn = document.getElementById('transcribeBtn');
             transcribeBtn.disabled = true;
+            summarizeBtn.style.display = 'none';
+            summaryDiv.style.display = 'none';
             updateStatus('Обработка...');
             showProgress(true);
 
@@ -176,6 +268,9 @@
                         console.log('Получен результат распознавания:', text);
                         transcriptionDiv.textContent = text || 'Текст не распознан';
                         updateStatus('Транскрибация завершена');
+                        if (text && text !== 'Текст не распознан') {
+                            summarizeBtn.style.display = 'block';
+                        }
                     } catch (error) {
                         showError(error.message);
                         transcriptionDiv.textContent = 'Произошла ошибка при распознавании';

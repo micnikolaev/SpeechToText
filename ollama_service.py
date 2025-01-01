@@ -37,3 +37,25 @@ class OllamaService:
         except Exception as e:
             logging.error(f"Ollama processing error: {e}")
             return text
+
+    def summarize_text(self, text):
+        try:
+            response = requests.post('http://localhost:11434/api/generate',
+                json={
+                    "model": self.model,
+                    "prompt": f"Сделай краткое описание текста в нескольких пунктах: {text}",
+                    "stream": False,
+                    "temperature": 0.1,
+                    "max_tokens": 300
+                })
+                
+            data = response.json()
+            if 'response' in data:
+                return data['response']
+            else:
+                logging.error(f"Unexpected Ollama response: {data}")
+                return "Не удалось создать краткое описание"
+                
+        except Exception as e:
+            logging.error(f"Ollama summarization error: {e}")
+            return "Ошибка при создании краткого описания"
