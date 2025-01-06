@@ -38,8 +38,9 @@ def transcribe():
         
         complete_text = vosk_service.transcribe_audio(resampled_path, model_type)
         
+        ollama_model = request.form.get('ollama_model')
         if use_ai and complete_text:
-            complete_text = ollama.process_text(complete_text)
+            complete_text = ollama.process_text(complete_text, model_name=ollama_model)
             
         return jsonify({'text': complete_text})
             
@@ -56,13 +57,49 @@ def transcribe():
 def summarize():
     try:
         text = request.json.get('text')
+        model = request.json.get('model')
         if not text:
             return jsonify({'error': 'No text provided'}), 400
             
-        summary = ollama.summarize_text(text)
+        summary = ollama.summarize_text(text, model_name=model)
         return jsonify({'summary': summary})
     except Exception as e:
         app.logger.error(f'Error: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/ask', methods=['POST'])
+def ask_question():
+    try:
+        data = request.json
+        text = data.get('text')
+        question = data.get('question')
+        model = data.get('model')
+        
+        if not text or not question:
+            return jsonify({'error': 'No text or question provided'}), 400
+            
+        answer = ollama.answer_question(text, question, model_name=model)
+        return jsonify({'answer': answer})
+    except Exception as e:
+        app.logger.error(f'Error: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/check_model', methods=['POST'])
+def check_model():
+    try:
+        model = request.json.get('model')
+        if not model:
+            return jsonify({'error': 'No model specified'}), 400
+            
+        if model in ollama.loaded_models:
+            return jsonify({'status': 'ready'})
+            
+        if ollama.load_model(model):
+            return jsonify({'status': 'ready'})
+        else:
+            return jsonify({'status': 'error'})
+    except Exception as e:
+        app.logger.error(f'Error checking model: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
