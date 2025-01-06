@@ -1,73 +1,14 @@
 from flask import Flask, send_file, request, jsonify
-import requests
-from vosk import Model, KaldiRecognizer
-import subprocess
-import wave
 import os
-from pathlib import Path
-import zipfile
-import json
+from vosk_service import VoskService
 from ollama_service import OllamaService
 
 app = Flask(__name__)
 import logging
 logging.basicConfig(level=logging.INFO)
 
+vosk_service = VoskService()
 ollama = OllamaService()
-
-MODELS = {
-    'full': {
-        'url': "https://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip",
-        'path': "vosk-model-ru-0.42"
-    },
-    'medium': {
-        'url': "https://alphacephei.com/vosk/models/vosk-model-ru-0.10.zip",
-        'path': "vosk-model-ru-0.10"
-    },
-    'small': {
-        'url': "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip",
-        'path': "vosk-model-small-ru-0.22"
-    }
-}
-
-MODEL_PATH = Path("models")
-
-def download_model(model_type='full'):
-    model_info = MODELS[model_type]
-    model_dir = MODEL_PATH / model_info['path']
-    
-    if not model_dir.exists():
-        print(f"Downloading {model_type} model...")
-        MODEL_PATH.mkdir(exist_ok=True)
-        
-        response = requests.get(model_info['url'], stream=True)
-        response.raise_for_status()
-        zip_path = MODEL_PATH / f"{model_info['path']}.zip"
-        
-        with open(zip_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-                
-        print("Extracting model...")
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(MODEL_PATH)
-        
-        zip_path.unlink()
-        print("Model ready")
-
-def resample_audio(input_path, output_path, target_sr=16000):
-    try:
-        subprocess.run([
-            'ffmpeg', '-i', input_path,
-            '-ar', str(target_sr),
-            '-ac', '1',
-            '-y',
-            output_path
-        ], check=True, capture_output=True)
-        return True
-    except subprocess.CalledProcessError as e:
-        logging.error(f"FFmpeg error: {e.stderr.decode()}")
-        return False
 
 @app.route('/')
 def home():
@@ -81,7 +22,7 @@ def transcribe():
         return jsonify({'error': 'No audio file'}), 400
     
     model_type = request.form.get('model', 'full')
-    if model_type not in MODELS:
+    if model_type not in vosk_service.MODELS:
         return jsonify({'error': 'Invalid model type'}), 400
         
     audio_file = request.files['audio']
@@ -92,33 +33,15 @@ def transcribe():
     try:
         audio_file.save(temp_path)
         
-        if not resample_audio(temp_path, resampled_path):
+        if not vosk_service.resample_audio(temp_path, resampled_path):
             return jsonify({'error': 'Failed to resample audio'}), 500
         
-        model = Model(str(MODEL_PATH / MODELS[model_type]['path']))
+        complete_text = vosk_service.transcribe_audio(resampled_path, model_type)
         
-        with wave.open(resampled_path, 'rb') as wf:
-            rec = KaldiRecognizer(model, 16000)
+        if use_ai and complete_text:
+            complete_text = ollama.process_text(complete_text)
             
-            full_text = []
-            while True:
-                data = wf.readframes(4000)
-                if len(data) == 0:
-                    break
-                if rec.AcceptWaveform(data):
-                    result = json.loads(rec.Result())
-                    if result.get('text'):
-                        full_text.append(result['text'])
-            
-            final_result = rec.FinalResult()
-            final_text = json.loads(final_result).get('text', '')
-            if final_text:
-                full_text.append(final_text)
-                
-            complete_text = ' '.join(full_text).strip()
-            if use_ai and complete_text:
-                complete_text = ollama.process_text(complete_text)
-            return jsonify({'text': complete_text or 'Текст не распознан'})
+        return jsonify({'text': complete_text})
             
     except Exception as e:
         app.logger.error(f'Error: {str(e)}')
@@ -145,9 +68,10 @@ def summarize():
 if __name__ == '__main__':
     print("Starting server...")
     try:
-        download_model('full')
-        download_model('medium')
-        download_model('small')
+        # Предзагрузка всех моделей
+        for model_type in vosk_service.MODELS:
+            vosk_service.download_model(model_type)
+            
         print("Starting Ollama...")
         if ollama.start():
             print("Starting server on http://localhost:5000")
