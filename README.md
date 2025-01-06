@@ -20,10 +20,14 @@
 ```bash
 # MacOS
 brew install ffmpeg
+```
 
+```bash
 # Ubuntu/Debian
 sudo apt-get install ffmpeg
+```
 
+```bash
 # Windows
 choco install ffmpeg
 ```
@@ -32,10 +36,14 @@ choco install ffmpeg
 ```bash
 # MacOS
 brew install ollama
+```
 
+```bash
 # Linux
 curl -fsSL https://ollama.com/install.sh | sh
+```
 
+```bash
 # Windows - посетите https://ollama.com/download
 ```
 
@@ -50,9 +58,9 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ## Установка
 
-1. Клонируйте репозиторий:
+1. Клонируйте и перейдите в репозитоий репозиторий:
 ```bash
-git clone <repository-url>
+git clone https://github.com/micnikolaev/SpeechToText.git
 cd SpeechToText
 ```
 
@@ -65,6 +73,9 @@ python -m venv venv
 ```bash
 # Windows
 venv\Scripts\activate
+```
+
+```bash
 # Linux/MacOS
 source venv/bin/activate
 ```
