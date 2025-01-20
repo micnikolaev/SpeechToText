@@ -18,34 +18,34 @@
 
 #### 1. FFmpeg:
 
-#####MacOS
+##### MacOS
 ```bash
 brew install ffmpeg
 ```
 
-#####Ubuntu/Debian
+##### Ubuntu/Debian
 ```bash
 sudo apt-get install ffmpeg
 ```
 
-#####Windows
+##### Windows
 ```bash
 choco install ffmpeg
 ```
 
 #### 2. Ollama:
 
-#####MacOS
+##### MacOS
 ```bash
 brew install ollama
 ```
 
-#####Linux
+##### Linux
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-#####Windows
+##### Windows
 ```bash
 Посетите https://ollama.com/download
 ```
@@ -74,12 +74,12 @@ python -m venv venv
 
 #### 3. Активируйте окружение:
 
-#####Windows
+##### Windows
 ```bash
 venv\Scripts\activate
 ```
 
-#####Linux/MacOS
+##### Linux/MacOS
 ```bash
 source venv/bin/activate
 ```
@@ -91,12 +91,12 @@ pip install -r requirements.txt
 
 #### 5. Запустите сервер:
 
-#####Вариант 1: Прямой запуск через Python
+##### Вариант 1: Прямой запуск через Python
 ```bash
 python server.py
 ```
 
-#####Вариант 2: Для MacOS/Linux можно использовать скрипт запуска
+##### Вариант 2: Для MacOS/Linux можно использовать скрипт запуска
 
 Сначала сделайте скрипт исполняемым:
 ```bash
