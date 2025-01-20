@@ -3,6 +3,7 @@ import os
 from vosk_service import VoskService
 from ollama_service import OllamaService
 import subprocess
+import webbrowser
 
 app = Flask(__name__)
 import logging
@@ -136,7 +137,16 @@ if __name__ == '__main__':
             
         print("Starting Ollama...")
         if ollama.start():
-            print("Starting server on http://localhost:5000")
+            server_url = "http://127.0.0.1:5000"
+            print(f"Starting server on {server_url}")
+            
+            response = input("Открыть страницу в браузере? (y/n): ").lower().strip()
+            if response == 'y':
+                try:
+                    webbrowser.open(server_url)
+                except Exception as e:
+                    print(f"Не удалось открыть браузер: {e}")
+                    
             app.run(port=5000)
         else:
             print("Failed to start Ollama")
