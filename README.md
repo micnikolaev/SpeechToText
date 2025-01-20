@@ -16,35 +16,38 @@
 
 ### Установка системных зависимостей
 
-1. FFmpeg:
+#### 1. FFmpeg:
+
+#####MacOS
 ```bash
-# MacOS
 brew install ffmpeg
 ```
 
+#####Ubuntu/Debian
 ```bash
-# Ubuntu/Debian
 sudo apt-get install ffmpeg
 ```
 
+#####Windows
 ```bash
-# Windows
 choco install ffmpeg
 ```
 
-2. Ollama:
+#### 2. Ollama:
+
+#####MacOS
 ```bash
-# MacOS
 brew install ollama
 ```
 
+#####Linux
 ```bash
-# Linux
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
+#####Windows
 ```bash
-# Windows - посетите https://ollama.com/download
+Посетите https://ollama.com/download
 ```
 
 ### Модели распознавания речи
@@ -58,42 +61,56 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ## Установка
 
-1. Клонируйте и перейдите в репозитоий репозиторий:
+#### 1. Клонируйте и перейдите в репозитоий репозиторий:
 ```bash
 git clone https://github.com/micnikolaev/SpeechToText.git
 cd SpeechToText
 ```
 
-2. Создайте виртуальное окружение:
+#### 2. Создайте виртуальное окружение:
 ```bash
 python -m venv venv
 ```
 
-3. Активируйте окружение:
+#### 3. Активируйте окружение:
+
+#####Windows
 ```bash
-# Windows
 venv\Scripts\activate
 ```
 
+#####Linux/MacOS
 ```bash
-# Linux/MacOS
 source venv/bin/activate
 ```
 
-4. Установите зависимости:
+#### 4. Установите зависимости:
 ```bash
 pip install -r requirements.txt
 ```
 
-5. Запустите сервер:
+#### 5. Запустите сервер:
+
+#####Вариант 1: Прямой запуск через Python
 ```bash
 python server.py
 ```
 
-3. Откройте в браузере:
+#####Вариант 2: Для MacOS/Linux можно использовать скрипт запуска
+
+Сначала сделайте скрипт исполняемым:
+```bash
+chmod +x start_server.command
 ```
-http://127.0.0.1:5000
+
+Затем запустите двойным кликом или через терминал:
+```bash
+./start_server.command
 ```
+
+#### 6. Откройте в браузере:
+
+[http://127.0.0.1:5000](http://127.0.0.1:5000)
 
 ## Использование
 
