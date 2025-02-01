@@ -37,9 +37,13 @@ class SpeechRecognitionServer:
         logging.info(f"Новое WebSocket соединение: {client_id}")
         
         try:
-            # Получаем тип модели
-            model_type = await websocket.recv()
-            print(f"Клиент {client_id} выбрал модель: {model_type}", flush=True)
+            # Получаем тип модели и язык
+            config = await websocket.recv()
+            config = json.loads(config)
+            model_type = config.get('model')
+            language = config.get('language', 'ru')  # По умолчанию русский
+            
+            print(f"Клиент {client_id} выбрал модель: {model_type}, язык: {language}", flush=True)
             
             if model_type == "whisper":
                 print(f"Клиент {client_id} использует Whisper", flush=True)
@@ -55,8 +59,8 @@ class SpeechRecognitionServer:
                     if len(audio_np) == 0:
                         raise ValueError("Получены пустые аудио данные")
                     
-                    # Распознаем текст через Whisper
-                    text = self.whisper_service.transcribe_audio(audio_np, language="ru")
+                    # Распознаем текст через Whisper с выбранным языком
+                    text = self.whisper_service.transcribe_audio(audio_np, language=language)
                     print(f"Результат распознавания для клиента {client_id}: {text[:100]}...", flush=True)
                     
                     try:

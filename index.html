@@ -192,6 +192,27 @@
         .model-selector label {
             margin-right: 10px;
         }
+        .radio-group {
+            margin: 10px 0;
+        }
+        .radio-group input[type="radio"] {
+            margin-right: 5px;
+        }
+        .radio-group label {
+            margin-right: 15px;
+        }
+        #languageSelector {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        #languageSelector label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -222,6 +243,16 @@
                 <option value="fomenks/T-Pro-1.0-it-q4_k_m">T-Pro (точная)</option>
             </select>
             <div id="modelStatus" class="status"></div>
+        </div>
+
+        <div id="languageSelector" style="display: none;" class="input-group">
+            <label>Язык распознавания:</label>
+            <div class="radio-group">
+                <input type="radio" id="langRu" name="language" value="ru" checked>
+                <label for="langRu">Русский</label>
+                <input type="radio" id="langEn" name="language" value="en">
+                <label for="langEn">English</label>
+            </div>
         </div>
 
         <div class="section">
@@ -288,8 +319,12 @@
                         ws.onopen = async () => {
                             try {
                                 console.log('WebSocket соединение открыто');
-                                // Отправляем тип модели
-                                ws.send('whisper');
+                                // Отправляем тип модели и язык
+                                const language = document.querySelector('input[name="language"]:checked').value;
+                                ws.send(JSON.stringify({
+                                    model: 'whisper',
+                                    language: language
+                                }));
                                 
                                 // Конвертируем аудио в float32 array
                                 const audioContext = new AudioContext();
@@ -571,6 +606,13 @@
         document.getElementById('engineSelect').addEventListener('change', function() {
             const voskSelector = document.getElementById('voskModelSelector');
             voskSelector.style.display = this.value === 'vosk' ? 'block' : 'none';
+
+            const languageSelector = document.getElementById('languageSelector');
+            if (this.value === 'whisper') {
+                languageSelector.style.display = 'block';
+            } else {
+                languageSelector.style.display = 'none';
+            }
         });
     </script>
 </body>
