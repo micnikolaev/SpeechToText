@@ -185,28 +185,141 @@
             outline: none;
             box-shadow: 0 0 0 2px #2563eb;
         }
+        .model-selector {
+            margin: 10px 0;
+        }
+        
+        .model-selector label {
+            margin-right: 10px;
+        }
+        .radio-group {
+            margin: 10px 0;
+        }
+        .radio-group input[type="radio"] {
+            margin-right: 5px;
+        }
+        .radio-group label {
+            margin-right: 15px;
+        }
+        #languageSelector {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #1e293b;
+            border-radius: 4px;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        #languageSelector label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+            color: #e2e8f0;
+        }
+        .radio-group {
+            margin: 10px 0;
+            color: #e2e8f0;
+        }
+        .radio-group input[type="radio"] {
+            margin-right: 5px;
+            accent-color: #2563eb;
+        }
+        .radio-group label {
+            margin-right: 15px;
+            color: #e2e8f0;
+        }
+        .load-button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .load-button:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+        }
+        .status.loading {
+            color: #fbbf24;
+        }
+        .status.ready {
+            color: #22c55e;
+        }
+        .status.error {
+            color: #ef4444;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Перевод аудио в текст</h1>
         
-        <div class="section">
-            <h2>Выберите модель распознавания</h2>
-            <select id="modelSelect" class="model-select">
-                <option value="full">Vosk русская модель 0.42 (1.8 ГБ, наиболее точная)</option>
-                <option value="medium">Vosk русская модель 0.10 (2.5 ГБ, средняя точность)</option>
-                <option value="small">Vosk русская модель 0.22 (45 МБ, быстрая, компактная)</option>
+        <div class="model-selector">
+            <label>Движок распознавания:</label>
+            <select id="engineSelect">
+                <option value="vosk">Vosk</option>
+                <option value="whisper">Whisper (более точный)</option>
             </select>
-            
-            <h2>Выберите LLM модель</h2>
+        </div>
+
+        <div id="voskModelSelector" class="model-selector">
+            <label>Модель Vosk:</label>
+            <select id="modelSelect">
+                <option value="small">Легкая (45MB)</option>
+                <option value="medium">Средняя (2.5GB)</option>
+                <option value="full" selected>Полная (1.8GB)</option>
+            </select>
+        </div>
+
+        <div id="whisperModelSelector" class="model-selector" style="display: none;">
+            <label>Модель Whisper:</label>
+            <select id="whisperModelSelect">
+                <!-- Tiny модели -->
+                <option value="tiny">Tiny (39M)</option>
+                <option value="tiny.en">Tiny.en - только английский (39M)</option>
+
+                <!-- Base модели -->
+                <option value="base">Base (74M)</option>
+                <option value="base.en">Base.en - только английский (74M)</option>
+
+                <!-- Small модели -->
+                <option value="small">Small (244M)</option>
+                <option value="small.en">Small.en - только английский (244M)</option>
+
+                <!-- Medium модели -->
+                <option value="medium">Medium (769M)</option>
+                <option value="medium.en">Medium.en - только английский (769M)</option>
+
+                <!-- Large модели -->
+                <option value="large">Large (1.5GB)</option>
+                <option value="large-v1">Large-v1 (1.5GB)</option>
+                <option value="large-v2">Large-v2 (1.5GB)</option>
+                <option value="large-v3" selected>Large-v3 - последняя версия (1.5GB)</option>
+            </select>
+            <button id="loadWhisperBtn" class="load-button" style="display: none;">Загрузить модель</button>
+            <div id="whisperModelStatus" class="status"></div>
+        </div>
+
+        <div class="model-selector">
+            <label>LLM модель:</label>
             <select id="ollamaModelSelect" class="model-select">
                 <option value="electromagneticcyclone/t-lite-q:3_k_l">T-Lite (быстрая)</option>
                 <option value="fomenks/T-Pro-1.0-it-q4_k_m">T-Pro (точная)</option>
             </select>
             <div id="modelStatus" class="status"></div>
         </div>
-        
+
+        <div id="languageSelector" style="display: none;" class="input-group">
+            <label>Язык распознавания:</label>
+            <div class="radio-group">
+                <input type="radio" id="langRu" name="language" value="ru" checked>
+                <label for="langRu">Русский</label>
+                <input type="radio" id="langEn" name="language" value="en">
+                <label for="langEn">English</label>
+            </div>
+        </div>
+
         <div class="section">
             <h2>Загрузите аудио/видео</h2>
             <input type="file" id="audioFile" accept="audio/*,video/*" class="file-input" />
@@ -259,24 +372,109 @@
     <script>
         async function sendAudioToServer(audioData, useAI) {
             try {
-                const formData = new FormData();
-                formData.append('audio', new Blob([audioData], { type: 'audio/wav' }), 'audio.wav');
-                formData.append('model', document.getElementById('modelSelect').value);
-                formData.append('useAI', document.getElementById('useAI').checked.toString());
-                formData.append('ollama_model', document.getElementById('ollamaModelSelect').value);
+                const engineSelect = document.getElementById('engineSelect');
                 
-                const response = await fetch('/transcribe', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                if (engineSelect.value === 'whisper') {
+                    console.log('Используем Whisper для распознавания');
+                    return new Promise((resolve, reject) => {
+                        const wsUrl = `ws://${window.location.hostname}:8765`;
+                        console.log('Подключаемся к WebSocket:', wsUrl);
+                        const ws = new WebSocket(wsUrl);
+                        
+                        ws.onopen = async () => {
+                            try {
+                                console.log('WebSocket соединение открыто');
+                                // Отправляем тип модели, язык и выбранную модель whisper
+                                const language = document.querySelector('input[name="language"]:checked').value;
+                                const whisperModel = document.getElementById('whisperModelSelect').value;
+                                ws.send(JSON.stringify({
+                                    model: 'whisper',
+                                    language: language,
+                                    whisper_model: whisperModel
+                                }));
+                                
+                                // Конвертируем аудио в float32 array
+                                const audioContext = new AudioContext();
+                                console.log('Размер входных данных:', audioData.byteLength);
+                                
+                                const audioBuffer = await audioContext.decodeAudioData(audioData);
+                                console.log('Аудио декодировано, каналов:', audioBuffer.numberOfChannels);
+                                
+                                // Получаем моно-канал и ресемплируем в 16kHz если нужно
+                                let audioData32;
+                                if (audioBuffer.sampleRate !== 16000) {
+                                    console.log('Ресемплинг с', audioBuffer.sampleRate, 'в 16000 Hz');
+                                    const offlineCtx = new OfflineAudioContext(1, audioBuffer.duration * 16000, 16000);
+                                    const source = offlineCtx.createBufferSource();
+                                    source.buffer = audioBuffer;
+                                    source.connect(offlineCtx.destination);
+                                    source.start();
+                                    const resampled = await offlineCtx.startRendering();
+                                    audioData32 = resampled.getChannelData(0);
+                                } else {
+                                    audioData32 = audioBuffer.getChannelData(0);
+                                }
+                                
+                                console.log('Аудио данные подготовлены:', {
+                                    sampleRate: 16000,
+                                    length: audioData32.length,
+                                    maxValue: Math.max(...audioData32.slice(0, 1000)),
+                                    minValue: Math.min(...audioData32.slice(0, 1000))
+                                });
+                                
+                                // Отправляем аудио данные
+                                ws.send(audioData32.buffer);
+                                console.log('Аудио данные отправлены');
+                            } catch (error) {
+                                console.error('Ошибка при подготовке аудио:', error);
+                                reject(error);
+                            }
+                        };
+                        
+                        ws.onmessage = (event) => {
+                            console.log('Получен ответ от сервера:', event.data);
+                            try {
+                                const response = JSON.parse(event.data);
+                                if (response.error) {
+                                    console.error('Ошибка от сервера:', response.error);
+                                    reject(new Error(response.error));
+                                } else {
+                                    resolve(response.text || event.data);
+                                }
+                            } catch {
+                                // Если не JSON, значит это текст
+                                resolve(event.data);
+                            }
+                            ws.close();
+                        };
+                        
+                        ws.onerror = (error) => {
+                            console.error('WebSocket ошибка:', error);
+                            reject(new Error('Ошибка WebSocket соединения'));
+                        };
+                    });
+                } else {
+                    // Существующий код для Vosk
+                    const formData = new FormData();
+                    formData.append('audio', new Blob([audioData], { type: 'audio/wav' }), 'audio.wav');
+                    formData.append('model', document.getElementById('modelSelect').value);
+                    formData.append('useAI', document.getElementById('useAI').checked.toString());
+                    formData.append('ollama_model', document.getElementById('ollamaModelSelect').value);
+                    
+                    const response = await fetch('/transcribe', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    return result.text;
                 }
-                
-                const result = await response.json();
-                return result.text;
             } catch (error) {
+                console.error('Ошибка:', error);
                 throw new Error('Ошибка отправки аудио: ' + error.message);
             }
         }
@@ -406,7 +604,7 @@
                             document.getElementById('questionInput').value = '';
                             document.getElementById('answer').textContent = '';
                         }
-            } catch (error) {
+                    } catch (error) {
                         showError(error.message);
                         transcriptionDiv.textContent = 'Произошла ошибка при распознавании';
                     } finally {
@@ -470,6 +668,157 @@
         document.addEventListener('DOMContentLoaded', function() {
             const modelSelect = document.getElementById('ollamaModelSelect');
             modelSelect.dispatchEvent(new Event('change'));
+        });
+
+        document.getElementById('engineSelect').addEventListener('change', function() {
+            const voskSelector = document.getElementById('voskModelSelector');
+            const whisperSelector = document.getElementById('whisperModelSelector');
+            const languageSelector = document.getElementById('languageSelector');
+            
+            voskSelector.style.display = this.value === 'vosk' ? 'block' : 'none';
+            whisperSelector.style.display = this.value === 'whisper' ? 'block' : 'none';
+            languageSelector.style.display = this.value === 'whisper' ? 'block' : 'none';
+            
+            checkWhisperModel();
+        });
+
+        document.getElementById('whisperModelSelect').addEventListener('change', function() {
+            const loadBtn = document.getElementById('loadWhisperBtn');
+            loadBtn.disabled = false;
+            checkWhisperModel();
+        });
+
+        async function checkWhisperModel() {
+            const modelSelect = document.getElementById('whisperModelSelect');
+            const loadBtn = document.getElementById('loadWhisperBtn');
+            const status = document.getElementById('whisperModelStatus');
+            const transcribeBtn = document.getElementById('transcribeBtn');
+            
+            if (document.getElementById('engineSelect').value !== 'whisper') {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/check_whisper_model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model: modelSelect.value })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'downloaded') {
+                    status.textContent = 'Модель доступна';
+                    status.className = 'status ready';
+                    loadBtn.style.display = 'none';
+                    transcribeBtn.disabled = false;
+                } else {
+                    status.textContent = 'Модель не скачана';
+                    status.className = 'status';
+                    loadBtn.style.display = 'inline-block';
+                    loadBtn.disabled = false;
+                    transcribeBtn.disabled = true;
+                }
+            } catch (error) {
+                status.textContent = 'Ошибка проверки модели';
+                status.className = 'status error';
+                console.error('Ошибка:', error);
+            }
+        }
+
+        document.getElementById('loadWhisperBtn').addEventListener('click', async function() {
+            const modelSelect = document.getElementById('whisperModelSelect');
+            const status = document.getElementById('whisperModelStatus');
+            const loadBtn = document.getElementById('loadWhisperBtn');
+            const transcribeBtn = document.getElementById('transcribeBtn');
+            
+            loadBtn.disabled = true;
+            status.textContent = 'Загрузка модели...';
+            status.className = 'status loading';
+            
+            try {
+                const response = await fetch('/load_whisper_model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model: modelSelect.value })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'downloaded') {
+                    status.textContent = 'Модель доступна';
+                    status.className = 'status ready';
+                    loadBtn.style.display = 'none';
+                    transcribeBtn.disabled = false;
+                } else {
+                    status.textContent = 'Ошибка загрузки модели';
+                    status.className = 'status error';
+                    loadBtn.style.display = 'inline-block';
+                    loadBtn.disabled = false;
+                    transcribeBtn.disabled = true;
+                    throw new Error(data.error || 'Ошибка загрузки модели');
+                }
+            } catch (error) {
+                status.textContent = 'Ошибка загрузки модели';
+                status.className = 'status error';
+                loadBtn.style.display = 'inline-block';
+                loadBtn.disabled = false;
+                transcribeBtn.disabled = true;
+                console.error('Ошибка:', error);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const engineSelect = document.getElementById('engineSelect');
+            if (engineSelect.value === 'whisper') {
+                checkWhisperModel();
+            }
+        });
+
+        document.getElementById('ollamaModelSelect').addEventListener('change', async function() {
+            const status = document.getElementById('modelStatus');
+            const model = this.value;
+            
+            status.textContent = 'Проверка модели...';
+            status.className = 'status loading';
+            
+            try {
+                const response = await fetch('/check_model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'ready') {
+                    status.textContent = 'Модель готова';
+                    status.className = 'status ready';
+                } else {
+                    status.textContent = 'Ошибка загрузки модели';
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.textContent = 'Ошибка проверки модели';
+                status.className = 'status error';
+                console.error('Ошибка:', error);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const modelSelect = document.getElementById('ollamaModelSelect');
+            modelSelect.dispatchEvent(new Event('change'));
+            
+            const engineSelect = document.getElementById('engineSelect');
+            if (engineSelect.value === 'whisper') {
+                checkWhisperModel();
+            }
         });
     </script>
 </body>
