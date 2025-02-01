@@ -42,12 +42,17 @@ class SpeechRecognitionServer:
             config = json.loads(config)
             model_type = config.get('model')
             language = config.get('language', 'ru')  # По умолчанию русский
+            whisper_model = config.get('whisper_model', 'large-v3')  # Добавляем получение модели
             
             print(f"Клиент {client_id} выбрал модель: {model_type}, язык: {language}", flush=True)
             
             if model_type == "whisper":
-                print(f"Клиент {client_id} использует Whisper", flush=True)
+                print(f"Клиент {client_id} использует Whisper модель {whisper_model}", flush=True)
                 try:
+                    # Загружаем модель в память перед использованием
+                    if not self.whisper_service.load_model(whisper_model):
+                        raise ValueError(f"Не удалось загрузить модель {whisper_model} в память")
+                    
                     # Получаем аудио данные
                     audio_data = await websocket.recv()
                     print(f"Получены аудио данные от клиента {client_id}, размер: {len(audio_data)} байт", flush=True)
@@ -241,6 +246,36 @@ def check_model():
             return jsonify({'status': 'error'})
     except Exception as e:
         app.logger.error(f'Error checking model: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/check_whisper_model', methods=['POST'])
+def check_whisper_model():
+    try:
+        model = request.json.get('model')
+        if not model:
+            return jsonify({'error': 'No model specified'}), 400
+            
+        if whisper_service.is_model_downloaded(model):
+            return jsonify({'status': 'downloaded'})
+        else:
+            return jsonify({'status': 'not_downloaded'})
+    except Exception as e:
+        app.logger.error(f'Error checking whisper model: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/load_whisper_model', methods=['POST'])
+def load_whisper_model():
+    try:
+        model = request.json.get('model')
+        if not model:
+            return jsonify({'error': 'No model specified'}), 400
+            
+        if whisper_service.download_model(model):
+            return jsonify({'status': 'downloaded'})
+        else:
+            return jsonify({'status': 'error', 'error': 'Failed to download model'})
+    except Exception as e:
+        app.logger.error(f'Error downloading whisper model: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
 class ServerThread(threading.Thread):

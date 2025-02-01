@@ -3,3 +3,5 @@ models/
 .DS_Store
 __pycache__
 venv
+models/whisper/*
+!models/whisper/.gitkeep

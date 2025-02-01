@@ -227,6 +227,28 @@
             margin-right: 15px;
             color: #e2e8f0;
         }
+        .load-button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .load-button:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+        }
+        .status.loading {
+            color: #fbbf24;
+        }
+        .status.ready {
+            color: #22c55e;
+        }
+        .status.error {
+            color: #ef4444;
+        }
     </style>
 </head>
 <body>
@@ -248,6 +270,35 @@
                 <option value="medium">Средняя (2.5GB)</option>
                 <option value="full" selected>Полная (1.8GB)</option>
             </select>
+        </div>
+
+        <div id="whisperModelSelector" class="model-selector" style="display: none;">
+            <label>Модель Whisper:</label>
+            <select id="whisperModelSelect">
+                <!-- Tiny модели -->
+                <option value="tiny">Tiny (39M)</option>
+                <option value="tiny.en">Tiny.en - только английский (39M)</option>
+
+                <!-- Base модели -->
+                <option value="base">Base (74M)</option>
+                <option value="base.en">Base.en - только английский (74M)</option>
+
+                <!-- Small модели -->
+                <option value="small">Small (244M)</option>
+                <option value="small.en">Small.en - только английский (244M)</option>
+
+                <!-- Medium модели -->
+                <option value="medium">Medium (769M)</option>
+                <option value="medium.en">Medium.en - только английский (769M)</option>
+
+                <!-- Large модели -->
+                <option value="large">Large (1.5GB)</option>
+                <option value="large-v1">Large-v1 (1.5GB)</option>
+                <option value="large-v2">Large-v2 (1.5GB)</option>
+                <option value="large-v3" selected>Large-v3 - последняя версия (1.5GB)</option>
+            </select>
+            <button id="loadWhisperBtn" class="load-button" style="display: none;">Загрузить модель</button>
+            <div id="whisperModelStatus" class="status"></div>
         </div>
 
         <div class="model-selector">
@@ -333,11 +384,13 @@
                         ws.onopen = async () => {
                             try {
                                 console.log('WebSocket соединение открыто');
-                                // Отправляем тип модели и язык
+                                // Отправляем тип модели, язык и выбранную модель whisper
                                 const language = document.querySelector('input[name="language"]:checked').value;
+                                const whisperModel = document.getElementById('whisperModelSelect').value;
                                 ws.send(JSON.stringify({
                                     model: 'whisper',
-                                    language: language
+                                    language: language,
+                                    whisper_model: whisperModel
                                 }));
                                 
                                 // Конвертируем аудио в float32 array
@@ -619,13 +672,152 @@
 
         document.getElementById('engineSelect').addEventListener('change', function() {
             const voskSelector = document.getElementById('voskModelSelector');
-            voskSelector.style.display = this.value === 'vosk' ? 'block' : 'none';
-
+            const whisperSelector = document.getElementById('whisperModelSelector');
             const languageSelector = document.getElementById('languageSelector');
-            if (this.value === 'whisper') {
-                languageSelector.style.display = 'block';
-            } else {
-                languageSelector.style.display = 'none';
+            
+            voskSelector.style.display = this.value === 'vosk' ? 'block' : 'none';
+            whisperSelector.style.display = this.value === 'whisper' ? 'block' : 'none';
+            languageSelector.style.display = this.value === 'whisper' ? 'block' : 'none';
+            
+            checkWhisperModel();
+        });
+
+        document.getElementById('whisperModelSelect').addEventListener('change', function() {
+            const loadBtn = document.getElementById('loadWhisperBtn');
+            loadBtn.disabled = false;
+            checkWhisperModel();
+        });
+
+        async function checkWhisperModel() {
+            const modelSelect = document.getElementById('whisperModelSelect');
+            const loadBtn = document.getElementById('loadWhisperBtn');
+            const status = document.getElementById('whisperModelStatus');
+            const transcribeBtn = document.getElementById('transcribeBtn');
+            
+            if (document.getElementById('engineSelect').value !== 'whisper') {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/check_whisper_model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model: modelSelect.value })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'downloaded') {
+                    status.textContent = 'Модель доступна';
+                    status.className = 'status ready';
+                    loadBtn.style.display = 'none';
+                    transcribeBtn.disabled = false;
+                } else {
+                    status.textContent = 'Модель не скачана';
+                    status.className = 'status';
+                    loadBtn.style.display = 'inline-block';
+                    loadBtn.disabled = false;
+                    transcribeBtn.disabled = true;
+                }
+            } catch (error) {
+                status.textContent = 'Ошибка проверки модели';
+                status.className = 'status error';
+                console.error('Ошибка:', error);
+            }
+        }
+
+        document.getElementById('loadWhisperBtn').addEventListener('click', async function() {
+            const modelSelect = document.getElementById('whisperModelSelect');
+            const status = document.getElementById('whisperModelStatus');
+            const loadBtn = document.getElementById('loadWhisperBtn');
+            const transcribeBtn = document.getElementById('transcribeBtn');
+            
+            loadBtn.disabled = true;
+            status.textContent = 'Загрузка модели...';
+            status.className = 'status loading';
+            
+            try {
+                const response = await fetch('/load_whisper_model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model: modelSelect.value })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'downloaded') {
+                    status.textContent = 'Модель доступна';
+                    status.className = 'status ready';
+                    loadBtn.style.display = 'none';
+                    transcribeBtn.disabled = false;
+                } else {
+                    status.textContent = 'Ошибка загрузки модели';
+                    status.className = 'status error';
+                    loadBtn.style.display = 'inline-block';
+                    loadBtn.disabled = false;
+                    transcribeBtn.disabled = true;
+                    throw new Error(data.error || 'Ошибка загрузки модели');
+                }
+            } catch (error) {
+                status.textContent = 'Ошибка загрузки модели';
+                status.className = 'status error';
+                loadBtn.style.display = 'inline-block';
+                loadBtn.disabled = false;
+                transcribeBtn.disabled = true;
+                console.error('Ошибка:', error);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const engineSelect = document.getElementById('engineSelect');
+            if (engineSelect.value === 'whisper') {
+                checkWhisperModel();
+            }
+        });
+
+        document.getElementById('ollamaModelSelect').addEventListener('change', async function() {
+            const status = document.getElementById('modelStatus');
+            const model = this.value;
+            
+            status.textContent = 'Проверка модели...';
+            status.className = 'status loading';
+            
+            try {
+                const response = await fetch('/check_model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'ready') {
+                    status.textContent = 'Модель готова';
+                    status.className = 'status ready';
+                } else {
+                    status.textContent = 'Ошибка загрузки модели';
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.textContent = 'Ошибка проверки модели';
+                status.className = 'status error';
+                console.error('Ошибка:', error);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const modelSelect = document.getElementById('ollamaModelSelect');
+            modelSelect.dispatchEvent(new Event('change'));
+            
+            const engineSelect = document.getElementById('engineSelect');
+            if (engineSelect.value === 'whisper') {
+                checkWhisperModel();
             }
         });
     </script>
