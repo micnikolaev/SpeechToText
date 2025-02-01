@@ -185,28 +185,45 @@
             outline: none;
             box-shadow: 0 0 0 2px #2563eb;
         }
+        .model-selector {
+            margin: 10px 0;
+        }
+        
+        .model-selector label {
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Перевод аудио в текст</h1>
         
-        <div class="section">
-            <h2>Выберите модель распознавания</h2>
-            <select id="modelSelect" class="model-select">
-                <option value="full">Vosk русская модель 0.42 (1.8 ГБ, наиболее точная)</option>
-                <option value="medium">Vosk русская модель 0.10 (2.5 ГБ, средняя точность)</option>
-                <option value="small">Vosk русская модель 0.22 (45 МБ, быстрая, компактная)</option>
+        <div class="model-selector">
+            <label>Движок распознавания:</label>
+            <select id="engineSelect">
+                <option value="vosk">Vosk</option>
+                <option value="whisper">Whisper (более точный)</option>
             </select>
-            
-            <h2>Выберите LLM модель</h2>
+        </div>
+
+        <div id="voskModelSelector" class="model-selector">
+            <label>Модель Vosk:</label>
+            <select id="modelSelect">
+                <option value="small">Легкая (45MB)</option>
+                <option value="medium">Средняя (2.5GB)</option>
+                <option value="full" selected>Полная (1.8GB)</option>
+            </select>
+        </div>
+
+        <div class="model-selector">
+            <label>LLM модель:</label>
             <select id="ollamaModelSelect" class="model-select">
                 <option value="electromagneticcyclone/t-lite-q:3_k_l">T-Lite (быстрая)</option>
                 <option value="fomenks/T-Pro-1.0-it-q4_k_m">T-Pro (точная)</option>
             </select>
             <div id="modelStatus" class="status"></div>
         </div>
-        
+
         <div class="section">
             <h2>Загрузите аудио/видео</h2>
             <input type="file" id="audioFile" accept="audio/*,video/*" class="file-input" />
@@ -259,24 +276,103 @@
     <script>
         async function sendAudioToServer(audioData, useAI) {
             try {
-                const formData = new FormData();
-                formData.append('audio', new Blob([audioData], { type: 'audio/wav' }), 'audio.wav');
-                formData.append('model', document.getElementById('modelSelect').value);
-                formData.append('useAI', document.getElementById('useAI').checked.toString());
-                formData.append('ollama_model', document.getElementById('ollamaModelSelect').value);
+                const engineSelect = document.getElementById('engineSelect');
                 
-                const response = await fetch('/transcribe', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                if (engineSelect.value === 'whisper') {
+                    console.log('Используем Whisper для распознавания');
+                    return new Promise((resolve, reject) => {
+                        const wsUrl = `ws://${window.location.hostname}:8765`;
+                        console.log('Подключаемся к WebSocket:', wsUrl);
+                        const ws = new WebSocket(wsUrl);
+                        
+                        ws.onopen = async () => {
+                            try {
+                                console.log('WebSocket соединение открыто');
+                                // Отправляем тип модели
+                                ws.send('whisper');
+                                
+                                // Конвертируем аудио в float32 array
+                                const audioContext = new AudioContext();
+                                console.log('Размер входных данных:', audioData.byteLength);
+                                
+                                const audioBuffer = await audioContext.decodeAudioData(audioData);
+                                console.log('Аудио декодировано, каналов:', audioBuffer.numberOfChannels);
+                                
+                                // Получаем моно-канал и ресемплируем в 16kHz если нужно
+                                let audioData32;
+                                if (audioBuffer.sampleRate !== 16000) {
+                                    console.log('Ресемплинг с', audioBuffer.sampleRate, 'в 16000 Hz');
+                                    const offlineCtx = new OfflineAudioContext(1, audioBuffer.duration * 16000, 16000);
+                                    const source = offlineCtx.createBufferSource();
+                                    source.buffer = audioBuffer;
+                                    source.connect(offlineCtx.destination);
+                                    source.start();
+                                    const resampled = await offlineCtx.startRendering();
+                                    audioData32 = resampled.getChannelData(0);
+                                } else {
+                                    audioData32 = audioBuffer.getChannelData(0);
+                                }
+                                
+                                console.log('Аудио данные подготовлены:', {
+                                    sampleRate: 16000,
+                                    length: audioData32.length,
+                                    maxValue: Math.max(...audioData32.slice(0, 1000)),
+                                    minValue: Math.min(...audioData32.slice(0, 1000))
+                                });
+                                
+                                // Отправляем аудио данные
+                                ws.send(audioData32.buffer);
+                                console.log('Аудио данные отправлены');
+                            } catch (error) {
+                                console.error('Ошибка при подготовке аудио:', error);
+                                reject(error);
+                            }
+                        };
+                        
+                        ws.onmessage = (event) => {
+                            console.log('Получен ответ от сервера:', event.data);
+                            try {
+                                const response = JSON.parse(event.data);
+                                if (response.error) {
+                                    console.error('Ошибка от сервера:', response.error);
+                                    reject(new Error(response.error));
+                                } else {
+                                    resolve(response.text || event.data);
+                                }
+                            } catch {
+                                // Если не JSON, значит это текст
+                                resolve(event.data);
+                            }
+                            ws.close();
+                        };
+                        
+                        ws.onerror = (error) => {
+                            console.error('WebSocket ошибка:', error);
+                            reject(new Error('Ошибка WebSocket соединения'));
+                        };
+                    });
+                } else {
+                    // Существующий код для Vosk
+                    const formData = new FormData();
+                    formData.append('audio', new Blob([audioData], { type: 'audio/wav' }), 'audio.wav');
+                    formData.append('model', document.getElementById('modelSelect').value);
+                    formData.append('useAI', document.getElementById('useAI').checked.toString());
+                    formData.append('ollama_model', document.getElementById('ollamaModelSelect').value);
+                    
+                    const response = await fetch('/transcribe', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    return result.text;
                 }
-                
-                const result = await response.json();
-                return result.text;
             } catch (error) {
+                console.error('Ошибка:', error);
                 throw new Error('Ошибка отправки аудио: ' + error.message);
             }
         }
@@ -406,7 +502,7 @@
                             document.getElementById('questionInput').value = '';
                             document.getElementById('answer').textContent = '';
                         }
-            } catch (error) {
+                    } catch (error) {
                         showError(error.message);
                         transcriptionDiv.textContent = 'Произошла ошибка при распознавании';
                     } finally {
@@ -470,6 +566,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             const modelSelect = document.getElementById('ollamaModelSelect');
             modelSelect.dispatchEvent(new Event('change'));
+        });
+
+        document.getElementById('engineSelect').addEventListener('change', function() {
+            const voskSelector = document.getElementById('voskModelSelector');
+            voskSelector.style.display = this.value === 'vosk' ? 'block' : 'none';
         });
     </script>
 </body>
